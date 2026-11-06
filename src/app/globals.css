@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* Colores de Samara III: piedra, carbón y el verde de la planta del letrero. */
+@theme {
+  --color-piedra-50: #faf8f4;
+  --color-piedra-100: #f2ede4;
+  --color-piedra-200: #e4dacb;
+  --color-piedra-300: #cdbda6;
+  --color-piedra-500: #9a8669;
+  --color-carbon: #2e2b27;
+  --color-carbon-suave: #5b554d;
+  --color-verde: #3f6b4a;
+  --color-verde-oscuro: #2f523a;
+  --color-verde-claro: #e3efe5;
+  --color-ambar-claro: #fbf0d9;
+  --color-ambar: #8a5a00;
+  --color-rojo-claro: #fbe4e1;
+  --color-rojo: #a3271b;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-piedra-50);
+  color: var(--color-carbon);
+}
+
+.campo {
+  @apply w-full rounded-lg border border-piedra-300 bg-white px-3 py-2.5 text-base outline-none focus:border-verde focus:ring-2 focus:ring-verde/20;
+}
+.etiqueta {
+  @apply mb-1 block text-sm font-medium text-carbon-suave;
+}
+.boton {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-verde px-4 py-2.5 font-medium text-white transition hover:bg-verde-oscuro disabled:cursor-not-allowed disabled:opacity-50;
+}
+.boton-sec {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-piedra-300 bg-white px-4 py-2.5 font-medium text-carbon transition hover:bg-piedra-100 disabled:opacity-50;
+}
+.tarjeta {
+  @apply rounded-2xl border border-piedra-200 bg-white p-5 shadow-sm;
+}
