@@ -1,34 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { cerrarSesion, claveCorrecta, exigirAdmin, iniciarSesion } from "@/lib/auth";
-import { q } from "@/lib/db";
+import { cifrarClave, claveTemporal, exigirAdmin, normalizarUsuario } from "@/lib/auth";
+import { q, q1 } from "@/lib/db";
 import { normalizarCasa } from "@/lib/casas";
-import { aNumero } from "@/lib/estado-cuenta";
-import { leerEstadoCuentaTabla } from "@/lib/estado-cuenta";
+import { aNumero, leerEstadoCuentaTabla } from "@/lib/estado-cuenta";
 import { iaDisponible, leerEstadoCuentaDocumento } from "@/lib/ai";
 import { aplicarCruce, conciliarAutomaticamente, guardarMovimientos } from "@/lib/conciliacion";
 import { MAX_ARCHIVO } from "@/lib/config";
-
-// --- Sesión ----------------------------------------------------------------
-
-export async function entrar(_prev: string | null, form: FormData) {
-  if (!process.env.ADMIN_PASSWORD) {
-    return "Falta configurar ADMIN_PASSWORD en el servidor.";
-  }
-  if (!claveCorrecta(String(form.get("clave") ?? ""))) {
-    await new Promise((r) => setTimeout(r, 800));
-    return "Contraseña incorrecta.";
-  }
-  await iniciarSesion();
-  redirect("/admin");
-}
-
-export async function salir() {
-  await cerrarSesion();
-  redirect("/");
-}
 
 // --- Pagos -----------------------------------------------------------------
 
@@ -180,4 +159,120 @@ export async function eliminarCasa(form: FormData) {
     [Number(form.get("id"))],
   );
   revalidatePath("/admin/casas");
+}
+
+export async function cambiarAlicuota(form: FormData) {
+  await exigirAdmin();
+  const alicuota = aNumero(String(form.get("alicuota") ?? ""));
+  if (alicuota == null || alicuota < 0) return;
+  await q("UPDATE casas SET alicuota = $2 WHERE id = $1", [Number(form.get("id")), alicuota]);
+  revalidatePath("/admin/casas");
+}
+
+export async function alicuotaParaTodas(form: FormData) {
+  await exigirAdmin();
+  const alicuota = aNumero(String(form.get("alicuota") ?? ""));
+  if (alicuota == null || alicuota < 0) return;
+  await q("UPDATE casas SET alicuota = $1", [alicuota]);
+  revalidatePath("/admin/casas");
+}
+
+// --- Usuarios --------------------------------------------------------------
+
+export interface ResultadoUsuario {
+  error?: string;
+  ok?: string;
+  usuario?: string;
+  clave?: string;
+}
+
+/** "12, 14 y 3" -> ids de esas casas; devuelve también los números que no existen. */
+async function idsDeCasas(texto: string) {
+  const numeros = [...new Set(String(texto).replace(/\by\b/gi, ",").split(/[\s,;]+/).map(normalizarCasa).filter(Boolean))];
+  if (numeros.length === 0) return { ids: [] as number[], faltan: [] as string[] };
+  const filas = await q<{ id: number; numero: string }>(
+    "SELECT id, upper(numero) AS numero FROM casas WHERE upper(numero) = ANY($1::text[])",
+    [numeros],
+  );
+  const encontrados = new Set(filas.map((f) => f.numero));
+  return { ids: filas.map((f) => f.id), faltan: numeros.filter((n) => !encontrados.has(n)) };
+}
+
+async function asignarCasas(usuarioId: number, ids: number[]) {
+  await q("DELETE FROM usuario_casas WHERE usuario_id = $1", [usuarioId]);
+  for (const casaId of ids) {
+    await q(
+      "INSERT INTO usuario_casas (usuario_id, casa_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+      [usuarioId, casaId],
+    );
+  }
+}
+
+const rolValido = (v: FormDataEntryValue | null) => (v === "admin" ? "admin" : "residente");
+
+export async function crearUsuario(
+  _prev: ResultadoUsuario | null,
+  form: FormData,
+): Promise<ResultadoUsuario> {
+  await exigirAdmin();
+  const usuario = normalizarUsuario(form.get("usuario"));
+  const nombre = String(form.get("nombre") ?? "").trim().slice(0, 120);
+  if (!nombre) return { error: "Escribe el nombre de la persona." };
+  if (!/^[a-z0-9._@-]{3,}$/.test(usuario)) {
+    return { error: "El usuario debe tener al menos 3 caracteres: letras, números, punto, guion o @ (sin espacios)." };
+  }
+  if (usuario === "admin") return { error: "El usuario «admin» está reservado." };
+  if (await q1("SELECT 1 FROM usuarios WHERE usuario = $1", [usuario])) {
+    return { error: `Ya existe el usuario «${usuario}».` };
+  }
+  const { ids, faltan } = await idsDeCasas(String(form.get("casas") ?? ""));
+  if (faltan.length) return { error: `Estas casas no existen: ${faltan.join(", ")}. Créalas primero en «Casas».` };
+
+  const clave = claveTemporal();
+  const nuevo = await q1<{ id: number }>(
+    `INSERT INTO usuarios (usuario, nombre, clave_hash, rol) VALUES ($1, $2, $3, $4) RETURNING id`,
+    [usuario, nombre, await cifrarClave(clave), rolValido(form.get("rol"))],
+  );
+  await asignarCasas(nuevo!.id, ids);
+  revalidatePath("/admin/usuarios");
+  revalidatePath("/admin/casas");
+  return { ok: `Usuario creado para ${nombre}.`, usuario, clave };
+}
+
+export async function editarUsuario(
+  _prev: ResultadoUsuario | null,
+  form: FormData,
+): Promise<ResultadoUsuario> {
+  const yo = await exigirAdmin();
+  const id = Number(form.get("id"));
+  const nombre = String(form.get("nombre") ?? "").trim().slice(0, 120);
+  if (!nombre) return { error: "Escribe el nombre de la persona." };
+  const rol = rolValido(form.get("rol"));
+  const activo = form.get("activo") === "on";
+  if (id === yo.id && (!activo || rol !== "admin")) {
+    return { error: "No puedes quitarte a ti mismo el acceso de administrador." };
+  }
+  const { ids, faltan } = await idsDeCasas(String(form.get("casas") ?? ""));
+  if (faltan.length) return { error: `Estas casas no existen: ${faltan.join(", ")}.` };
+
+  await q("UPDATE usuarios SET nombre = $2, rol = $3, activo = $4 WHERE id = $1", [id, nombre, rol, activo]);
+  await asignarCasas(id, ids);
+  revalidatePath("/admin", "layout");
+  return { ok: "Cambios guardados." };
+}
+
+export async function restablecerClave(
+  _prev: ResultadoUsuario | null,
+  form: FormData,
+): Promise<ResultadoUsuario> {
+  await exigirAdmin();
+  const id = Number(form.get("id"));
+  const u = await q1<{ usuario: string }>("SELECT usuario FROM usuarios WHERE id = $1", [id]);
+  if (!u) return { error: "El usuario no existe." };
+  const clave = claveTemporal();
+  await q("UPDATE usuarios SET clave_hash = $2, debe_cambiar_clave = true WHERE id = $1", [
+    id,
+    await cifrarClave(clave),
+  ]);
+  return { ok: "Contraseña restablecida.", usuario: u.usuario, clave };
 }

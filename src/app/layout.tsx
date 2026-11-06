@@ -3,6 +3,8 @@ import { Geist } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
 import { CONJUNTO } from "@/lib/config";
+import { sesion } from "@/lib/auth";
+import { salir } from "./sesion-acciones";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -12,7 +14,8 @@ export const metadata: Metadata = {
   description: `Registro y verificación de pagos de alícuota del conjunto ${CONJUNTO.nombre}.`,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const s = await sesion();
   return (
     <html lang="es">
       <body className={`${geist.variable} min-h-screen font-sans antialiased`}>
@@ -29,10 +32,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               />
               <span className="whitespace-nowrap text-lg font-semibold tracking-wide">{CONJUNTO.nombre}</span>
             </Link>
-            <nav className="flex gap-4 text-sm text-carbon-suave">
-              <Link href="/pagar" className="hover:text-verde">Subir pago</Link>
-              <Link href="/consulta" className="hover:text-verde">Mis pagos</Link>
-              <Link href="/admin" className="hover:text-verde">Administración</Link>
+            <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-carbon-suave">
+              {s ? (
+                <>
+                  <Link href="/pagar" className="hover:text-verde">Subir pago</Link>
+                  <Link href="/mis-pagos" className="hover:text-verde">Mis pagos</Link>
+                  {s.rol === "admin" && (
+                    <Link href="/admin" className="hover:text-verde">Administración</Link>
+                  )}
+                  <Link href="/cuenta" className="hover:text-verde" title="Mi cuenta">
+                    {s.nombre.split(" ")[0]}
+                  </Link>
+                  <form action={salir}>
+                    <button className="underline hover:text-verde">Salir</button>
+                  </form>
+                </>
+              ) : (
+                <Link href="/ingresar" className="boton py-1.5">Ingresar</Link>
+              )}
             </nav>
           </div>
         </header>

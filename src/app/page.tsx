@@ -1,8 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { CONJUNTO } from "@/lib/config";
+import { sesion } from "@/lib/auth";
 
-export default function Inicio() {
+export default async function Inicio() {
+  const s = await sesion();
   return (
     <div className="space-y-8">
       <section className="grid items-center gap-6 rounded-3xl bg-piedra-100 p-6 sm:grid-cols-[1fr_auto] sm:p-10">
@@ -14,12 +16,18 @@ export default function Inicio() {
             Registra el pago de tu alícuota en un minuto
           </h1>
           <p className="max-w-xl text-carbon-suave">
-            Escribe el número de tu casa y sube la foto o el PDF del comprobante. La
+            Ingresa con tu usuario y sube la foto o el PDF del comprobante. La
             administración lo verifica con el estado de cuenta del banco y te confirma.
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
-            <Link href="/pagar" className="boton">Subir comprobante</Link>
-            <Link href="/consulta" className="boton-sec">Consultar mis pagos</Link>
+            {s ? (
+              <>
+                <Link href="/pagar" className="boton">Subir comprobante</Link>
+                <Link href="/mis-pagos" className="boton-sec">Ver mis pagos</Link>
+              </>
+            ) : (
+              <Link href="/ingresar" className="boton">Ingresar</Link>
+            )}
           </div>
         </div>
         <Image
@@ -34,7 +42,7 @@ export default function Inicio() {
       <section className="grid gap-4 sm:grid-cols-3">
         {[
           ["1", "Transfiere", "Paga la alícuota a la cuenta del conjunto. Escribe “Casa” y tu número en la descripción de la transferencia."],
-          ["2", "Sube el comprobante", "La app lee el monto, la fecha y el número de comprobante. Tú solo revisas."],
+          ["2", "Sube el comprobante", "Ingresa con tu usuario. La app lee el monto, la fecha y el número de comprobante; tú solo revisas."],
           ["3", "Te confirmamos", "Cuando el pago aparece en el banco, queda aprobado y lo ves en “Mis pagos”."],
         ].map(([n, t, d]) => (
           <div key={n} className="tarjeta">

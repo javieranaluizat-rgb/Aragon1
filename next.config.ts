@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
     // Permite subir estados de cuenta de hasta 4 MB desde el panel.
     serverActions: { bodySizeLimit: "5mb" },
   },
+  async redirects() {
+    return [
+      { source: "/consulta", destination: "/mis-pagos", permanent: false },
+      { source: "/admin/login", destination: "/ingresar", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buscarCasa } from "@/lib/casas";
+import { casaPermitida, sesion } from "@/lib/auth";
 import { leerArchivoComprobante } from "@/lib/archivos";
 import { iaDisponible, leerComprobante, type LecturaComprobante } from "@/lib/ai";
 import { CONJUNTO } from "@/lib/config";
@@ -13,10 +13,14 @@ interface Aviso {
 }
 
 export async function POST(req: Request) {
+  const s = await sesion();
+  if (!s || s.debeCambiarClave) {
+    return NextResponse.json({ error: "Tu sesión terminó. Vuelve a ingresar." }, { status: 401 });
+  }
   const form = await req.formData();
-  const casa = await buscarCasa(form.get("casa"));
+  const casa = await casaPermitida(s, form.get("casa_id"));
   if (!casa) {
-    return NextResponse.json({ error: "Esa casa no está registrada." }, { status: 400 });
+    return NextResponse.json({ error: "Esa casa no está asignada a tu usuario." }, { status: 403 });
   }
   const archivo = await leerArchivoComprobante(form.get("archivo"));
   if ("error" in archivo) {

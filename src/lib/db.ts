@@ -67,6 +67,26 @@ CREATE TABLE IF NOT EXISTS pagos (
 
 CREATE INDEX IF NOT EXISTS pagos_estado_idx ON pagos(estado);
 CREATE INDEX IF NOT EXISTS pagos_casa_idx ON pagos(casa_id);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id SERIAL PRIMARY KEY,
+  usuario TEXT NOT NULL UNIQUE,
+  nombre TEXT NOT NULL,
+  clave_hash TEXT NOT NULL,
+  rol TEXT NOT NULL DEFAULT 'residente' CHECK (rol IN ('residente', 'admin')),
+  activo BOOLEAN NOT NULL DEFAULT true,
+  debe_cambiar_clave BOOLEAN NOT NULL DEFAULT true,
+  creado TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ultimo_ingreso TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS usuario_casas (
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  casa_id INTEGER NOT NULL REFERENCES casas(id) ON DELETE CASCADE,
+  PRIMARY KEY (usuario_id, casa_id)
+);
+
+ALTER TABLE pagos ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 `;
 
 declare global {

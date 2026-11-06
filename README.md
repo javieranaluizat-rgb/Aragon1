@@ -6,27 +6,36 @@ con el estado de cuenta del banco.
 
 ## Qué hace
 
-**Residentes** (sin usuario ni contraseña)
+**Residentes** (con su propio usuario)
 
-1. Escriben el número de su casa.
-2. Toman una foto o suben el PDF del comprobante. La app les explica cómo hacerlo bien.
-3. La app lee el comprobante y llena sola el monto, la fecha, el número de
+1. Entran con el usuario y la contraseña temporal que les da la administración.
+   La primera vez, la app les pide crear su propia contraseña.
+2. La app ya sabe cuál es su casa (si tienen varias, eligen de una lista).
+3. Toman una foto o suben el PDF del comprobante. La app les explica cómo hacerlo bien.
+4. La app lee el comprobante y llena sola el monto, la fecha, el número de
    comprobante, el banco y quién pagó. El residente solo revisa y confirma.
-4. El pago queda como **Pendiente**. En **Mis pagos** ven cuándo pasa a **Aprobado**.
+5. El pago queda como **Pendiente**. En **Mis pagos** ven solo los pagos de sus casas.
 
 Controles automáticos: no se puede registrar dos veces el mismo comprobante,
-se avisa si la cuenta destino no es la del conjunto y si el monto es menor que la alícuota.
+nadie puede subir pagos de una casa que no tenga asignada, y se avisa si la
+cuenta destino no es la del conjunto o si el monto es menor que la alícuota.
 
-**Administración** (`/admin`, con contraseña)
+**Administración** (`/admin`)
 
-- Sube el estado de cuenta del banco (Excel `.xlsx`, CSV o PDF).
-- La app cruza cada depósito con los comprobantes por monto, fecha, número de
+- **Usuarios:** crear usuarios (residentes o administradores), asignar y
+  reasignar casas, restablecer contraseñas y desactivar cuentas.
+- **Casas:** crear casas, cambiar la alícuota de una casa o de todas a la vez.
+- **Cruce con el banco:** sube el estado de cuenta (Excel `.xlsx`, CSV o PDF) y
+  la app cruza cada depósito con los comprobantes por monto, fecha, número de
   comprobante y número de casa en la descripción ("Casa 12", "C-12").
   - Los cruces seguros se aprueban solos.
   - Los dudosos aparecen como **Posibles coincidencias** para confirmar con un clic.
   - Muestra comprobantes que no aparecen en el banco y depósitos que nadie reportó.
-- Puede aprobar o rechazar a mano, con una nota que el residente ve.
-- Administra las casas y sus alícuotas.
+- **Pagos:** aprobar o rechazar a mano, con una nota que el residente ve.
+
+**Primer ingreso:** usuario `admin` con la contraseña de la variable
+`ADMIN_PASSWORD`. Esa cuenta siempre funciona y sirve para recuperar el acceso.
+Desde ahí puedes crear cuentas de administrador con nombre propio.
 
 ## Probar en tu computadora
 

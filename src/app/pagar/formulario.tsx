@@ -50,10 +50,19 @@ async function prepararImagen(archivo: File): Promise<{ archivo: File; ancho: nu
   };
 }
 
-export function FormularioPago() {
-  const [paso, setPaso] = useState<Paso>("casa");
-  const [casa, setCasa] = useState("");
-  const [alicuota, setAlicuota] = useState<number | null>(null);
+export interface CasaOpcion {
+  id: number;
+  numero: string;
+  alicuota: number;
+}
+
+export function FormularioPago({ casas }: { casas: CasaOpcion[] }) {
+  const unica = casas.length === 1;
+  const [paso, setPaso] = useState<Paso>(unica ? "archivo" : "casa");
+  const [casaId, setCasaId] = useState<number | null>(unica ? casas[0].id : null);
+  const elegida = casas.find((c) => c.id === casaId);
+  const casa = elegida?.numero ?? "";
+  const alicuota = elegida?.alicuota ?? null;
   const [archivo, setArchivo] = useState<File | null>(null);
   const [vista, setVista] = useState<string | null>(null);
   const [lectura, setLectura] = useState<Lectura | null>(null);
@@ -72,25 +81,9 @@ export function FormularioPago() {
     concepto: `Alícuota ${MESES[hoy.getMonth()]} ${hoy.getFullYear()}`,
   });
 
-  async function confirmarCasa(e: React.FormEvent) {
+  function confirmarCasa(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setCargando(true);
-    try {
-      const r = await fetch(`/api/casa?numero=${encodeURIComponent(casa)}`);
-      const j = await r.json();
-      if (!j.existe) {
-        setError("No encontramos esa casa. Revisa el número o consulta con la administración.");
-        return;
-      }
-      setCasa(j.numero);
-      setAlicuota(j.alicuota);
-      setPaso("archivo");
-    } catch {
-      setError("No hay conexión. Intenta de nuevo.");
-    } finally {
-      setCargando(false);
-    }
+    if (casaId) setPaso("archivo");
   }
 
   async function elegirArchivo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -134,7 +127,7 @@ export function FormularioPago() {
     setCargando(true);
     try {
       const fd = new FormData();
-      fd.set("casa", casa);
+      fd.set("casa_id", String(casaId));
       fd.set("archivo", f);
       const r = await fetch("/api/comprobante/leer", { method: "POST", body: fd });
       const j = await r.json();
@@ -169,7 +162,7 @@ export function FormularioPago() {
     setCargando(true);
     try {
       const fd = new FormData();
-      fd.set("casa", casa);
+      fd.set("casa_id", String(casaId));
       fd.set("archivo", archivo);
       for (const [k, v] of Object.entries(datos)) fd.set(k, v);
       if (lectura) fd.set("lectura", JSON.stringify(lectura));
@@ -201,7 +194,7 @@ export function FormularioPago() {
 
   return (
     <div className="space-y-4">
-      <Pasos actual={paso} />
+      <Pasos actual={paso} conCasa={!unica} />
 
       {error && (
         <div role="alert" className="rounded-lg bg-rojo-claro px-4 py-3 text-sm text-rojo">
@@ -212,21 +205,22 @@ export function FormularioPago() {
       {paso === "casa" && (
         <form onSubmit={confirmarCasa} className="tarjeta space-y-4">
           <div>
-            <label htmlFor="casa" className="etiqueta">Número de casa</label>
-            <input
+            <label htmlFor="casa" className="etiqueta">¿Para qué casa es el pago?</label>
+            <select
               id="casa"
-              className="campo text-2xl font-semibold tracking-wider"
-              inputMode="text"
-              autoComplete="off"
-              placeholder="Ej. 12"
-              value={casa}
-              onChange={(e) => setCasa(e.target.value)}
+              className="campo text-lg font-semibold"
+              value={casaId ?? ""}
+              onChange={(e) => setCasaId(Number(e.target.value) || null)}
               required
-              autoFocus
-            />
+            >
+              <option value="">Elige la casa…</option>
+              {casas.map((c) => (
+                <option key={c.id} value={c.id}>Casa {c.numero}</option>
+              ))}
+            </select>
           </div>
-          <button className="boton w-full" disabled={cargando || !casa.trim()}>
-            {cargando ? "Buscando…" : "Continuar"}
+          <button className="boton w-full" disabled={!casaId}>
+            Continuar
           </button>
         </form>
       )}
@@ -236,8 +230,12 @@ export function FormularioPago() {
           <p className="text-sm">
             Casa <strong>{casa}</strong>
             {alicuota ? <> · Alícuota mensual <strong>${alicuota.toFixed(2)}</strong></> : null}
-            {" · "}
-            <button className="text-verde underline" onClick={() => setPaso("casa")}>cambiar</button>
+            {!unica && (
+              <>
+                {" · "}
+                <button className="text-verde underline" onClick={() => setPaso("casa")}>cambiar</button>
+              </>
+            )}
           </p>
 
           <div className="rounded-xl bg-piedra-100 p-4 text-sm">
@@ -341,7 +339,7 @@ export function FormularioPago() {
             administración lo confirme con el banco, aparecerá como aprobado.
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
-            <Link href={`/consulta?casa=${encodeURIComponent(casa)}`} className="boton">Ver mis pagos</Link>
+            <Link href="/mis-pagos" className="boton">Ver mis pagos</Link>
             <button className="boton-sec" onClick={reiniciar}>Subir otro comprobante</button>
           </div>
         </div>
@@ -350,13 +348,15 @@ export function FormularioPago() {
   );
 }
 
-function Pasos({ actual }: { actual: Paso }) {
-  const pasos: [Paso, string][] = [
-    ["casa", "Casa"],
-    ["archivo", "Comprobante"],
-    ["revisar", "Revisar"],
-    ["listo", "Listo"],
-  ];
+function Pasos({ actual, conCasa }: { actual: Paso; conCasa: boolean }) {
+  const pasos = (
+    [
+      ["casa", "Casa"],
+      ["archivo", "Comprobante"],
+      ["revisar", "Revisar"],
+      ["listo", "Listo"],
+    ] as [Paso, string][]
+  ).filter(([p]) => conCasa || p !== "casa");
   const i = pasos.findIndex(([p]) => p === actual);
   return (
     <ol className="flex gap-2 text-xs">

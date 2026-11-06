@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buscarCasa } from "@/lib/casas";
+import { casaPermitida, sesion } from "@/lib/auth";
 import { leerArchivoComprobante } from "@/lib/archivos";
 import { q1 } from "@/lib/db";
 import { aFecha, aNumero } from "@/lib/estado-cuenta";
@@ -10,10 +10,14 @@ const corto = (v: FormDataEntryValue | null, max = 200) => {
 };
 
 export async function POST(req: Request) {
+  const s = await sesion();
+  if (!s || s.debeCambiarClave) {
+    return NextResponse.json({ error: "Tu sesión terminó. Vuelve a ingresar." }, { status: 401 });
+  }
   const form = await req.formData();
-  const casa = await buscarCasa(form.get("casa"));
+  const casa = await casaPermitida(s, form.get("casa_id"));
   if (!casa) {
-    return NextResponse.json({ error: "Esa casa no está registrada." }, { status: 400 });
+    return NextResponse.json({ error: "Esa casa no está asignada a tu usuario." }, { status: 403 });
   }
   const archivo = await leerArchivoComprobante(form.get("archivo"));
   if ("error" in archivo) {
@@ -60,8 +64,8 @@ export async function POST(req: Request) {
 
   const pago = await q1<{ id: number }>(
     `INSERT INTO pagos (casa_id, monto, fecha_pago, banco, referencia, ordenante,
-       cuenta_destino, concepto, archivo, archivo_tipo, archivo_nombre, lectura_ia)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       cuenta_destino, concepto, archivo, archivo_tipo, archivo_nombre, lectura_ia, usuario_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id`,
     [
       casa.id,
@@ -76,6 +80,7 @@ export async function POST(req: Request) {
       archivo.tipo,
       archivo.nombre.slice(0, 120),
       lecturaIa ? JSON.stringify(lecturaIa) : null,
+      s.id || null,
     ],
   );
 
